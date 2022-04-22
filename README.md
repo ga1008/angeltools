@@ -85,9 +85,12 @@ print(results, te - ts)
 ```  
 
  - 其他工具
+ 1. 基于文件的异步锁
 
 ```python
-# ------ 基于文件的异步锁 --------
+# 由于文件io的延迟性，文件锁不适用于高并发的场景，也不能实现分布式，只适合单机器低速异步进程的隔离
+# 优点是不需要数据库或第三方依赖，即开即用
+# 高并发可以使用 python-redis-lock
 from angeltools.StrTool import FileLock
 
 
@@ -97,18 +100,26 @@ def do_jobs():
 
 with FileLock(lock_id='test-lock'):
     do_jobs()
+```  
 
-# ------ url 组合拆解 --------
+ 2. url 组合拆解
+
+```python
 from angeltools.StrTool import UrlFormat
 
 uf = UrlFormat(url='http://www.baidu.com?page=1&user=me&name=%E5%BC%A0%E4%B8%89')
 
 uf.url_format(params_only=True, unquote_params=True)  # {'page': '1', 'user': 'me', 'name': '张三'}
 uf.split_url()  # {'queries': {'page': '1', 'user': 'me', 'name': '张三'}, 'host': 'www.baidu.com', 'protocol': 'http', 'path': '', 'require_params': '', 'fragment': ''}
-uf.make_url('http://www.baidu.com', params_add_dic={'page': '1', 'user': 'me',
-                                                    'name': '张三'})  # 'http://www.baidu.com?page=1&user=me&name=%E5%BC%A0%E4%B8%89'
+uf.make_url(
+    'http://www.baidu.com', 
+    params_add_dic={'page': '1', 'user': 'me','name': '张三'}
+)  # 'http://www.baidu.com?page=1&user=me&name=%E5%BC%A0%E4%B8%89'
+```
 
-# ------ scrapy 爬虫xpath包装 --------
+
+ 3. scrapy 爬虫xpath包装  
+```python
 from angeltools.StrTool import ScrapyXpath
 # 包装 scrapy response 的xpath方法，不用每次都 extract 再判断结果，使爬虫更整洁
 # 也可以传入由 requests 获取的 response text 和 url，变成 scrapy selector 对象方便提取
@@ -129,9 +140,11 @@ html_content = requests.get(url)
 sx = ScrapyXpath(url='http://www.baidu.com', html_content=html_content)
 sx.xe('./@href')  # https://www.xxx.com
 sx.xe('.//text()')  # ["abc", "efg", ...]     结果有多个时返回列表
+```
 
 
-# ------ 图片转字符块工具 --------
+ 4. 图片转字符块工具  
+```python
 from angeltools.ImageTool import image2chars
 
 image2chars(
@@ -153,8 +166,11 @@ image2chars(
                               + = . + @ .                   
                               - # # # +                     
 """
+```
 
-# ------ 文字转字符块工具 --------
+
+ 5. 文字转字符块工具  
+```python
 from angeltools.ImageTool import text2chars
 
 text2chars(
@@ -175,7 +191,7 @@ text2chars(
   -             - -     - -         - -         - / / / -   -     - - - - - - - -     - - - - - - -               
 """
 ```
-
+  
  - 终端工具  
   
 1. 图片转字符块工具

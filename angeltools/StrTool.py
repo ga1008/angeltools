@@ -1,5 +1,6 @@
 import hashlib
 import os
+import random
 import re
 import sys
 import time
@@ -221,6 +222,22 @@ class FileLock:
     """
     def __init__(self, lock_id, timeout: float or int = None):
         self.timeout = float(timeout) if timeout else 3600 * 24 * 30 * 12
+        self.__init_lock(lock_id)
+        self.fps = self.fp.absolute()
+        self.enter_with_acquire = False
+
+    def __enter__(self):
+        if not self.enter_with_acquire:
+            self.__acquire_lock()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.__exit_lock()
+
+    def __call__(self, *args, **kwargs):
+        if 'timeout' in kwargs:
+            self.timeout = kwargs['timeout']
+
+    def __init_lock(self, lock_id):
         lock_id_hash = hash_str(str(lock_id))
 
         if sys.platform == 'linux':
@@ -228,24 +245,60 @@ class FileLock:
         else:
             self.fp = Path(__file__).parent / f'/{lock_id_hash}.lock'
 
-    def __enter__(self):
+    def __acquire_lock(self):
         expire_time = time.time() + self.timeout
         try:
-            while self.fp.exists() and time.time() - expire_time < 0:
-                time.sleep(0.1)
+            while self.__get_size() and time.time() - expire_time < 0:
+                self.__wait()
         except KeyboardInterrupt:
             sys.exit()
-        self.fp.touch()
+        self.__add_num()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__exit_lock()
+    def __read_num(self):
+        num = "0"
+        try:
+            with open(self.fps, 'r') as rf:
+                num = rf.read().strip()
+        except:pass
+        num = int(num) if num else 0
+        return num
+
+    def __get_size(self):
+        return 0 if not os.path.exists(self.fps) else os.path.getsize(self.fps)
+
+    def __add_num(self):
+        self.fp.write_text("1" * (self.__get_size() + 1))
+
+    def __sub_num(self):
+        num = self.__get_size()
+        if num > 1:
+            self.fp.write_text("1" * (num - 1))
+        else:
+            os.remove(self.fps)
+
+    def __occupy(self):
+        if not self.fp.exists():
+            return False
+        num = self.fp.read_text(encoding='utf-8')
+        if num and num.isdigit() and int(num) >= 1:
+            return True
+        return False
 
     def __exit_lock(self):
         try:
-            os.remove(self.fp.absolute())
+            self.__sub_num()
         except:
             pass
+
+    def __wait(self):
+        time.sleep(random.randint(1, 10)/10)
+
+    def acquire(self, **kwargs):
+        if 'timeout' in kwargs:
+            self.timeout = kwargs['timeout']
+        self.enter_with_acquire = True
+        return self.__acquire_lock()
 
     def lock_time(self, format_time: str or bool = False):
         """
@@ -254,7 +307,7 @@ class FileLock:
         """
 
         if self.fp.exists():
-            tm = os.path.getatime(self.fp.absolute())
+            tm = os.path.getatime(self.fps)
         else:
             tm = 0
         if not format_time:
@@ -290,5 +343,16 @@ if __name__ == '__main__':
     #         time.sleep(0.5)
     #     print(lock.lock_time(format_time=True))
 
-    uf = UrlFormat('http://www.baidu.com?page=1&user=me&name=%E5%BC%A0%E4%B8%89')
-    print(uf.split_url())
+    from angeltools.Slavers import BigSlaves
+
+    def do_job(job_name):
+        time.sleep(random.randint(1, 10) / 10)
+        with FileLock('test-lock', timeout=1000):
+            for i in range(20):
+                print(f"{job_name}: {i}")
+                time.sleep(0.5)
+
+    BigSlaves(7).work(do_job, [x for x in "ABCDEFGHIJKLMN"])
+
+    # uf = UrlFormat('http://www.baidu.com?page=1&user=me&name=%E5%BC%A0%E4%B8%89')
+    # print(uf.split_url())
