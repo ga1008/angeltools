@@ -27,16 +27,16 @@ class Fdfs:
 
     def __lock(self):
         if self.lock_client:
-            lock = redis_lock.Lock(self.lock_client, self.lock_name)
+            lock = redis_lock.Lock(self.lock_client, self.lock_name, expire=10)
         else:
-            lock = FileLock(self.lock_name)
+            lock = FileLock(self.lock_name, timeout=10)
         return lock
 
     def upload(self, file_string, decode=False, print_out=True):
         try:
             if isinstance(file_string, str):
                 file_string = file_string.encode()
-            with self.lock.acquire(timeout=10):
+            with self.lock:
                 save_res = self.client.upload_by_buffer(file_string)
             fid = save_res.get("Remote file_id")
             if print_out:
@@ -56,7 +56,7 @@ class Fdfs:
             if isinstance(remote_file_id, str):
                 remote_file_id = remote_file_id.encode()
             try:
-                with self.lock.acquire(timeout=10):
+                with self.lock:
                     res_dic = self.client.download_to_buffer(remote_file_id)
                 file_content = res_dic.get('Content')
             except Exception as GE:
@@ -72,7 +72,7 @@ class Fdfs:
         try:
             if isinstance(remote_file_id, str):
                 remote_file_id = remote_file_id.encode()
-            with self.lock.acquire(timeout=10):
+            with self.lock:
                 del_sta_str, del_fid, storage_ip = self.client.delete_file(remote_file_id)
             del_sta = True if 'success' in del_sta_str else False
         except Exception as DE:

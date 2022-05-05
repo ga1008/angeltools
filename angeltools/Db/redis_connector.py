@@ -1,3 +1,4 @@
+import base64
 import logging
 import random
 import sys
@@ -5,9 +6,11 @@ import time
 import traceback
 
 import redis
+import redis_lock
+from BaseColor.base_colors import hgreen
 
-from angeltools.StrTool import get_domain
-from . import get_uri_info
+from angeltools.StrTool import get_domain, gen_uid1
+from angeltools.Db import get_uri_info
 
 
 class RedisConnect:
@@ -111,6 +114,86 @@ class RedisConnect:
         return True
 
 
+class RedisFdfs:
+
+    def __init__(self, db: int = None, connect_params: dict = None, lock_name=None, expire: int = None, id_prefix: str = None):
+        self.lock_name = lock_name if lock_name else 'RedisFdfsLock'
+        self.cli = RedisConnect(db=db, connect_params=connect_params).cli()
+        self.lock_client = RedisConnect(db=1, connect_params=connect_params).cli()
+        self.lock = self.__lock()
+        self.expire = expire if expire else 3600 * 24 * 7       # 默认1星期缓存
+        self.__id_prefix = id_prefix if id_prefix else 'RedisFdfsFile_'
+
+    def __lock(self):
+        return redis_lock.Lock(self.lock_client, self.lock_name, expire=10)
+
+    def __upload(self, file_string: str, expire: int):
+        uid = self.__id_prefix + gen_uid1()
+        expire = expire if expire else self.expire
+        file_encoded = base64.b64encode(file_string.encode())
+        self.cli.setex(uid, expire, file_encoded)
+        return uid
+
+    def __get(self, fid: str, decode: bool):
+        file = self.cli.get(fid) or b''
+        if decode:
+            file = base64.b64decode(file).decode()
+        return file
+
+    def __del(self, fid):
+        return self.cli.delete(fid)
+
+    def upload(self, file_string, print_out=True, expire=None):
+        try:
+            with self.lock:
+                save_id = self.__upload(file_string, expire=expire)
+            if print_out:
+                print(f"file cache: [ {hgreen(save_id)} ]")
+        except Exception as UE:
+            print(f"error when caching file: {UE}")
+            return False
+        return save_id
+
+    def get(self, file_id: str, decode=True):
+        file_content = b''
+        if file_id:
+            try:
+                with self.lock:
+                    file_content = self.__get(file_id, decode=decode)
+            except Exception as GE:
+                print(f"error in getting cache file: {GE}")
+        return file_content
+
+    def delete(self, file_id):
+        del_sta = False
+        try:
+            with self.lock:
+                del_sta = self.__del(file_id)
+        except Exception as DE:
+            print(f"error in deleting file {file_id}: {DE}")
+        return bool(del_sta)
+
+    def __del__(self):
+        try:
+            self.cli.close()
+        except:pass
+
+
 if __name__ == "__main__":
-    pass
+    conn = {
+        "host": '127.0.0.1',
+        "port": 6379,
+        "password": '',
+    }
+    rdfs = RedisFdfs(1, connect_params=conn, expire=30)
+
+    # test_id = rdfs.upload('987654321poiuytrewq')
+    # print(test_id)
+
+    test_data = rdfs.get('RedisFdfsFile_cceceb50-cc40-11ec-bb8b-adb0630c08c7')
+    print(test_data)
+
+    # test_del = rdfs.delete('RedisFdfsFile_1e271e74-cc40-11ec-bb8b-adb0630c08c7')
+    # print(test_del)
+
 

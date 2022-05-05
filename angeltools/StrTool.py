@@ -243,7 +243,7 @@ class FileLock:
         if sys.platform == 'linux':
             self.fp = Path(f'/tmp/{lock_id_hash}.lock')
         else:
-            self.fp = Path(__file__).parent / f'/{lock_id_hash}.lock'
+            self.fp = Path(__file__).parent / f'{lock_id_hash}.lock'
 
     def __acquire_lock(self):
         expire_time = time.time() + self.timeout

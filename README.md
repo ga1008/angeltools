@@ -192,6 +192,41 @@ text2chars(
 """
 ```
   
+
+
+
+ 6. 使用redis的文件缓存器（模仿fdfs）  
+```python
+from angeltools.Db.redis_connector import RedisFdfs
+
+
+conn = {
+    "host": '127.0.0.1',
+    "port": 6379,
+    "password": None,
+}
+rdfs = RedisFdfs(
+    db=1,                   
+    connect_params=conn,    # redis 连接配置
+    expire=30               # 缓存过期时间（默认1星期）
+)
+
+test_id = rdfs.upload('test data 001')
+print(test_id)
+# RedisFdfsFile_cceceb50-cc40-11ec-bb8b-adb0630c08c7
+
+test_data = rdfs.get('RedisFdfsFile_cceceb50-cc40-11ec-bb8b-adb0630c08c7')
+print(test_data)
+# test data 001
+# 没有结果或出错的时候返回空字符 ''
+
+test_del = rdfs.delete('RedisFdfsFile_cceceb50-cc40-11ec-bb8b-adb0630c08c7')
+print(test_del)
+# True
+```  
+  
+
+
  - 终端工具  
   
 1. 图片转字符块工具
