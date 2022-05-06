@@ -73,10 +73,9 @@ class Slaves:
 
     def work(self, func, params_list: list):
         try:
-            mission_name = func.__name__
             if self.name:
-                mission_name = self.name
-            print(f"Slaves start working: {mission_name}")
+                mission_name = self.name if isinstance(self.name, str) else func.__name__
+                print(f"Slaves start working: {mission_name}")
 
             if not self.with_tq:
                 return self.pool.map(func, params_list)
@@ -111,10 +110,9 @@ class BigSlaves:
 
     def work(self, func, params_list: list):
         try:
-            mission_name = func.__name__
             if self.name:
-                mission_name = self.name
-            print(f"BigSlaves start working: {mission_name}")
+                mission_name = self.name if isinstance(self.name, str) else func.__name__
+                print(f"Slaves start working: {mission_name}")
 
             if not self.with_tq:
                 return self.pool.map(func, params_list)
