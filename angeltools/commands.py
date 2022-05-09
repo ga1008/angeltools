@@ -3,6 +3,7 @@ import json
 import os.path
 from pathlib import Path
 
+from angeltools.SysTool import cmd_sta
 from angeltools.ImageTool import text2chars, image2chars
 
 
@@ -134,6 +135,44 @@ def img2chars(args=None):
         reverse=reverse,
         chart_list=chart_list
     )
+
+
+def cmd_status(args=None):
+    dp = ' *** linux 进程cpu内存查看'
+    da = "--->   "
+    parser = argparse.ArgumentParser(description=dp, add_help=True)
+    parser.add_argument("keyword", type=str, default=None, help=f'{da} 关键字')
+
+    parser.add_argument("-i", "--interval", type=float, dest="interval", default=1, help=f'{da} 刷新间隔')
+    parser.add_argument("-s", "--sorted_by", type=str, dest="sorted_by", default='pid', help=f'{da} 排序方式，pid、cpu、men、name。分别对应：进程id，cpu百分比，内存百分比，进程名')
+    parser.add_argument("-r", "--sorted_reverse", type=str, dest="sorted_reverse", nargs='?', default='n', help=f'{da}y/n 是否反向排序，默认否')
+    parser.add_argument("-d", "--detail", type=str, dest="detail", nargs='?', default='n', help=f'{da}y/n 是否显示命令全路径，默认否')
+
+    args = parser.parse_args()
+    keyword = args.keyword
+    if not keyword and keyword.strip():
+        print("keyword is required!")
+        return False
+
+    try:
+        interval = float(args.interval) or 1.0
+    except:
+        print("Interval Error, float number is required!")
+        return False
+
+    sorted_by = args.sorted_by
+    sorted_reverse = args.sorted_reverse
+    detail = args.detail
+    detail = False if detail else True
+    sorted_reverse = False if sorted_reverse else True
+
+    try:
+        cmd_sta(keyword, interval, detail, sorted_by, sorted_reverse)
+    except KeyboardInterrupt:
+        print("\n exit")
+    except Exception as E:
+        print(f"\n Error: {E}")
+    return
 
 
 if __name__ == '__main__':
