@@ -1,9 +1,12 @@
 import argparse
 import json
 import os.path
+import time
 from pathlib import Path
 
-from angeltools.SysTool import cmd_sta
+from BaseColor.base_colors import hred, green, yellow, hblue
+
+from angeltools.SysTool import cmd_sta, run_cmd
 from angeltools.ImageTool import text2chars, image2chars
 
 
@@ -173,6 +176,53 @@ def cmd_status(args=None):
     except Exception as E:
         print(f"\n Error: {E}")
     return
+
+
+def timing_cmd(args=None):
+    dp = ' *** linux 定时执行命令'
+    da = "--->   "
+    parser = argparse.ArgumentParser(description=dp, add_help=True)
+    parser.add_argument("cmd", type=str, default=None, nargs='?', help=f'{da} 命令')
+
+    parser.add_argument("-i", "--interval", type=float, dest="interval", default=60, help=f'{da} 执行间隔，单位秒，默认60s')
+    parser.add_argument("-f", "--file", type=str, dest="file", default=None, help=f'{da} 命令所在文件的路径，文件内每行一条命令。若设置了此文件参数，则前面位置参数将失效')
+
+    args = parser.parse_args()
+    cmd_list = [args.cmd]
+    interval = float(args.interval) if args.interval else 60
+    file = args.file
+
+    if file and os.path.exists(file):
+        with open(file, 'r') as rf:
+            cmd_list = [x.strip() for x in rf.readlines()]
+    try:
+        print(f'will run this command(s) in every {hred(interval)} seconds')
+        for cmd in cmd_list:
+            print(f"    {green(cmd)}")
+        print()
+        for t in range(1, 5):
+            print(f'\rstarting in {hred(5-t)} s', end='')
+            time.sleep(1)
+        print()
+
+        count = 1
+        while True:
+            for cmd in cmd_list:
+                try:
+                    print(f"running {yellow(cmd)}")
+                    run_cmd(cmd)
+                except KeyboardInterrupt:
+                    print(f'cancel command: {cmd}')
+                    print(hred(f'hit ctrl+c again to quit all commands'))
+                except Exception as RTE:
+                    print(RTE)
+            print(f"loop {hblue(count)} done! waiting {hred(interval)} seconds")
+            time.sleep(interval)
+            count += 1
+    except KeyboardInterrupt:
+        print('sys out')
+    except Exception as RCE:
+        print(RCE)
 
 
 if __name__ == '__main__':

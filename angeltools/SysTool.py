@@ -5,7 +5,7 @@ import time
 import psutil
 import sys
 
-from BaseColor.base_colors import hyellow, hcyan
+from BaseColor.base_colors import hyellow, hcyan, hred
 
 
 def cpu_sta(interval=1.0):
@@ -62,7 +62,8 @@ def cmd_sta(cmd, interval=1.0, detail=False, sorted_by=None, sorted_reverse=Fals
     sor = sorted_num(sorted_by=sorted_by)
     while True:
         try:
-            cmd_res = os.popen(f'ps aux | grep {cmd}').read()
+            with os.popen(f'ps aux | grep {cmd}') as ops:
+                cmd_res = ops.read()
             cmd_res_l = [x.strip() for x in cmd_res.split('\n') if x and x.strip() and ' grep' not in x]
             if not detail:
                 cmd_res_l = cmd_res_format(cmd_res_l, sor, sorted_reverse)
@@ -77,6 +78,44 @@ def cmd_sta(cmd, interval=1.0, detail=False, sorted_by=None, sorted_reverse=Fals
             print(f"Error: {Err}")
         finally:
             time.sleep(interval)
+
+
+def get_cmd_pid(cmd):
+    with os.popen(f"ps aux | grep '{cmd}'") as ops:
+        cmd_res = ops.read()
+    cmd_res_l = [x.strip() for x in cmd_res.split('\n') if x and x.strip() and ' grep' not in x]
+    pid_list = []
+    for cmd_line in cmd_res_l:
+        match_res = re.findall(r'\S+ + (\d+) +([.\d]+) +([.\d]+) +[^a-zA-Z+]+[a-zA-Z+]+[^a-zA-Z+/]+(.*)', cmd_line)
+        if match_res:
+            pid, cpu, mem, cmd_str = match_res[0]
+            pid_list.append(pid)
+    return pid_list
+
+
+def stop_pre_cmd_by_cmd_name(cmd):
+    cmd_pid_list = get_cmd_pid(cmd)
+    if cmd_pid_list:
+        print(f"command [ {hred(cmd)} ] still running, trying to stop it")
+        for pid in get_cmd_pid(cmd):
+            try:
+                os.kill(int(pid), 9)
+                return True
+            except Exception as STE:
+                print(f"Error in stopping command: {STE}")
+                return False
+    return True
+
+
+def run_cmd(cmd):
+    try:
+        if stop_pre_cmd_by_cmd_name(cmd):
+            with os.popen(cmd) as osp:
+                print(osp.read())
+            return True
+    except Exception as RCE:
+        print(f"Error in running cmd: {RCE}")
+    return False
 
 
 if __name__ == "__main__":

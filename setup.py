@@ -8,7 +8,7 @@ using_setuptools = True
 
 setup_args = {
     "name": "angeltools",
-    "version": "0.1.6",
+    "version": "0.2.0",
     "url": "https://github.com/ga1008/angeltools",
     "description": "personal python small tools collection",
     "long_description": long_description,
@@ -25,6 +25,7 @@ setup_args = {
         'txt2char = angeltools.commands:txt2chars',
         'img2char = angeltools.commands:img2chars',
         'cmdsta = angeltools.commands:cmd_status',
+        'tmcmd = angeltools.commands:timing_cmd',
     ]},
     "classifiers": [
         "Programming Language :: Python :: 3",
