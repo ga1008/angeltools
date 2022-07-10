@@ -36,9 +36,10 @@ class FakeSlaves:
 
     def work(self, func, params_list: list):
         try:
-            tq = tqdm.tqdm(total=len(params_list))
-            res_data = self.map_list(func, params_list, tq=tq if self.with_tq else None)
-            tq.close()
+            if self.with_tq:
+                res_data = self.map_list_tq(func, params_list)
+            else:
+                res_data = self.map_list(func, params_list)
             return res_data
 
         except Exception as E:
@@ -47,12 +48,21 @@ class FakeSlaves:
             log = logging.Logger('Slaves')
             log.error(f"error in Slaves: ({str(func)}):\n{E}\n\n{err}")
 
-    def map_list(self, func, params_list: list, tq=None):
+    def map_list(self, func, params_list: list):
         res_list = list()
+        for data in params_list:
+            res_list.append(func(data))
+        return res_list
+
+    def map_list_tq(self, func, params_list: list):
+        res_list = list()
+
+        tq = tqdm.tqdm(total=len(params_list))
         for data in params_list:
             res_list.append(func(data))
             if tq:
                 tq.update()
+        tq.close()
         return res_list
 
 
@@ -157,8 +167,8 @@ if __name__ == '__main__':
         time.sleep(random.randint(1, 2))
         return x + y
 
-    data = [[x0, y0] for x0, y0 in zip(range(10, 20), range(1, 10))]
+    test_data = [[x0, y0] for x0, y0 in zip(range(10, 20), range(1, 10))]
     ts = time.time()
-    results = BigSlaves(workers=7, with_tq=False).work(do_add, params_list=data)
+    results = BigSlaves(workers=7, with_tq=False).work(do_add, params_list=test_data)
     te = time.time()
     print(results, te - ts)
