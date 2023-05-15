@@ -2,8 +2,6 @@ import random
 import time
 from datetime import datetime, timedelta
 
-from angeltools.StrTool import get_domain, FileLock
-
 
 def tell_timestamp(time_str=None, str_format="%Y-%m-%d %H:%M:%S"):
     if not time_str:
@@ -28,6 +26,8 @@ def wait(url, time_range: list = None):
     :param url: https://api.github.com
     :param time_range: 随机时间列表 [start, end]
     """
+    from angeltools.StrTool import get_domain, FileLock
+
     time_range = [10, 30] if not time_range else time_range
     domain = get_domain(url)
 

@@ -3,8 +3,6 @@ import json
 import os.path
 from pathlib import Path
 
-from angeltools.ImageTool import text2chars, image2chars
-
 
 def txt2chars(args=None):
     dp = ' *** 文字转字符块小工具'
@@ -60,6 +58,7 @@ def txt2chars(args=None):
             chart_list = json.loads(chart_list)
         except:
             raise ValueError("-c chart_list 参数不正确")
+    from angeltools.ImageTool import text2chars
 
     text2chars(
         text,
@@ -125,6 +124,7 @@ def img2chars(args=None):
             chart_list = json.loads(chart_list)
         except:
             raise ValueError("-c chart_list 参数不正确")
+    from angeltools.ImageTool import image2chars
 
     image2chars(
         image_path=image,
@@ -134,6 +134,37 @@ def img2chars(args=None):
         reverse=reverse,
         chart_list=chart_list
     )
+
+
+def text_sorted_by_first_pinyin(args=None):
+    dp = ' *** a tool to sorted text lines by first pinyin letter'
+    da = "--->   "
+    parser = argparse.ArgumentParser(description=dp, add_help=True)
+    parser.add_argument("file_path", type=str, default=None, help=f'{da} 路径')
+
+    parser.add_argument("-p", "--save_path", type=str, dest="save_path",
+                        default=None, help=f'{da} save 路径')
+
+    parser.add_argument("-f", "--full_match", type=bool, dest="full_match", nargs='?', default=False,
+                        help=f'{da} match all pinyin letters')
+
+    parser.add_argument("-r", "--reverse", type=bool, dest="reverse", nargs='?', default=False,
+                        help=f'{da} 反转')
+
+    from angeltools.StrTool import SortedWithFirstPinyin
+
+    args = parser.parse_args()
+
+    file_path = args.file_path
+    save_path = args.save_path
+    reverse = True if args.reverse else False
+    full_match = True if args.full_match else False
+    SortedWithFirstPinyin(
+        file_path=file_path,
+        save_path=save_path,
+        full_match=full_match,
+        reverse=reverse,
+    ).run()
 
 
 if __name__ == '__main__':

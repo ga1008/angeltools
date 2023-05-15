@@ -8,7 +8,7 @@ using_setuptools = True
 
 setup_args = {
     "name": "angeltools",
-    "version": "0.1.3",
+    "version": "0.2.7",
     "url": "https://github.com/ga1008/angeltools",
     "description": "personal python small tools collection",
     "long_description": long_description,
@@ -24,6 +24,7 @@ setup_args = {
     "entry_points": {"console_scripts": [
         'txt2char = angeltools.commands:txt2chars',
         'img2char = angeltools.commands:img2chars',
+        'sortbypy = angeltools.commands:text_sorted_by_first_pinyin',
     ]},
     "classifiers": [
         "Programming Language :: Python :: 3",
@@ -40,6 +41,8 @@ setup_args = {
         "requests",
         "pygame",
         "pillow",
+        "pypinyin",
+        "basecolors==0.0.2",
     ],
 }
 

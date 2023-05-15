@@ -2,12 +2,9 @@ import logging
 import os
 import sys
 import threading
+import time
+import random
 import traceback
-from multiprocessing import Pool as Mpp
-from multiprocessing.dummy import Pool as ThreadPool
-
-import tqdm
-from tqdm.contrib.concurrent import process_map, thread_map
 
 
 class MWT(threading.Thread):
@@ -51,6 +48,8 @@ class FakeSlaves:
         self._say_name(func_name=func_name)
         try:
             if self.with_tq:
+                import tqdm
+
                 tq = tqdm.tqdm(total=len(params_list))
                 res_data = self.map_list(func, params_list, tq=tq)
                 tq.close()
@@ -106,9 +105,8 @@ class Slaves:
         :param with_tq:     使用tqdm
         :param name:        任务名称
         """
-        self.pool = ThreadPool(workers if workers else 10)
         self.with_tq = with_tq
-        self.workers = workers
+        self.workers = workers if workers else 10
         self.name = name
 
     def _say_name(self, func_name=None):
@@ -126,9 +124,14 @@ class Slaves:
         try:
 
             if self.with_tq:
+                from tqdm.contrib.concurrent import thread_map
+
                 res_data = thread_map(func, params_list, max_workers=self.workers)
             else:
-                res_data = self.pool.map(func, params_list)
+                from multiprocessing.dummy import Pool as ThreadPool
+
+                pool = ThreadPool(self.workers)
+                res_data = pool.map(func, params_list)
             if list_flat and isinstance(res_data, list) and isinstance(res_data[0], list):
                 if remove_item_if_empty:
                     res_data = [item for sublist in res_data for item in sublist if item]
@@ -186,8 +189,12 @@ class BigSlaves:
 
         try:
             if self.with_tq:
+                from tqdm.contrib.concurrent import process_map
+
                 res_data = process_map(func, params_list, max_workers=self.workers, chunksize=1000)
             else:
+                from multiprocessing import Pool as Mpp
+
                 pool = Mpp(self.workers)
                 res_data = pool.map(func, params_list)
 
@@ -236,8 +243,6 @@ def test_main():
 
 
 if __name__ == '__main__':
-    import time
-    import random
 
     def do_add(args):
         x, y = args

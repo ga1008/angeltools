@@ -9,3 +9,5 @@ urllib3
 pygame
 pillow
 python-redis-lock
+pypinyin
+basecolors==0.0.2

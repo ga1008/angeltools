@@ -4,12 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-import requests
-from numpy import array
-from tqdm import tqdm
-
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-import pygame
 
 
 def image2chars(image_path, width=120, k=1.0, reverse=False, outfile=None, chart_list=None):
@@ -55,6 +50,7 @@ def text2image(text, size=None, font_color=None, back_color=None, save_path=None
     :param font_path:
     :return:
     """
+    import pygame
 
     font_path = check_font_path(font_path)
     size = int(size) if size else 50
@@ -77,7 +73,7 @@ def text2image(text, size=None, font_color=None, back_color=None, save_path=None
     return save_path
 
 
-def strip_empty_line(arr: array):
+def strip_empty_line(arr):
 
     r_temp = [sum(r) for r in arr]
     rs = get_empty_line_start(r_temp)
@@ -105,6 +101,9 @@ def get_empty_line_start(num_lis: list):
 
 
 def check_font_path(font_path):
+    from tqdm import tqdm
+    import requests
+
     if font_path and os.path.exists(font_path):
         return font_path
     base_path = Path(__file__).parent

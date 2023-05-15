@@ -6,14 +6,11 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from urllib.parse import quote, urlparse, unquote
-
-import urllib3
-from scrapy import Selector
-from scrapy.http import HtmlResponse
 
 
 def get_domain(url):
+    import urllib3
+
     domain = urllib3.get_host(url)[1]
     if domain.startswith('www.'):
         domain = domain.lstrip('www.')
@@ -42,10 +39,15 @@ class ScrapyXpath:
     包装 scrapy response 的xpath方法，不用每次都 extract 再判断结果，使爬虫更整洁
     也可以传入由 requests 获取的 response text 和 url，变成 scrapy selector 对象方便提取
     """
+    from scrapy import Selector
+
     def __init__(self, scrapy_selector: Selector = None, url=None, html_content=None):
         """
         :param scrapy_selector:     response.xpath('//div[@class="xxx"]')
         """
+        from scrapy.http import HtmlResponse
+
+        self.HtmlResponse = HtmlResponse
         if scrapy_selector:
             self.raw = scrapy_selector
         elif url and html_content:
@@ -54,7 +56,7 @@ class ScrapyXpath:
             raise ValueError('scrapy_selector or url and html_content required!')
 
     def scrapy_response(self, url, html_content):
-        return HtmlResponse(url=url, body=html_content, encoding="utf-8")
+        return self.HtmlResponse(url=url, body=html_content, encoding="utf-8")
 
     def response_selector(self, url, html_content):
         return self.scrapy_response(url, html_content).xpath('//html')
@@ -115,14 +117,19 @@ class ScrapyXpath:
 
 class UrlFormat:
     def __init__(self, url=None):
+        from urllib.parse import quote, urlparse, unquote
+
+        self.quote = quote
+        self.urlparse = urlparse
+        self.unquote = unquote
         self.url = url
 
     def quote_str(self, s):
-        res = quote(str(s).encode())
+        res = self.quote(str(s).encode())
         return res
 
     def unquote_str(self, s):
-        res = unquote(s)
+        res = self.unquote(s)
         return res
 
     def make_url(self, base, params_add_dic, quote_param=True):
@@ -133,8 +140,8 @@ class UrlFormat:
     def split_url(self):
         url_data = dict()
         if self.url:
-            temp_data = urlparse(unquote(self.url))
-            url_data["queries"] = {x.split("=")[0]: unquote("=".join(x.split("=")[1:])) for x in temp_data.query.split("&")}
+            temp_data = self.urlparse(self.unquote(self.url))
+            url_data["queries"] = {x.split("=")[0]: self.unquote("=".join(x.split("=")[1:])) for x in temp_data.query.split("&")}
             url_data["host"] = temp_data.netloc
             url_data["protocol"] = temp_data.scheme
             url_data["path"] = temp_data.path
@@ -335,6 +342,65 @@ class FileLock:
         return lock_time
 
 
+class SortedWithFirstPinyin(object):
+
+    def __init__(self, file_path, save_path=None, full_match=False, reverse=False):
+        from BaseColor.base_colors import hred
+        from pypinyin import lazy_pinyin
+
+        file_path = Path(file_path)
+        if not os.path.exists(str(file_path.absolute())):
+            print(f"No such file: {hred(file_path.absolute())}")
+            sys.exit(1)
+        self.file_path = file_path
+        self.lazy_pinyin = lazy_pinyin
+
+        if not save_path:
+            save_path_split = self.file_path.name.split('.')
+            file_name = '.'.join(save_path_split[:-1])
+            sub = save_path_split[-1]
+            save_path = self.file_path.parent / f"{file_name}_sorted.{sub}"
+        self.save_path = str(Path(save_path).absolute())
+        self.full_match = full_match
+        self.reverse = reverse
+
+    def get_pinyin_first(self, text):
+        return self.lazy_pinyin(text)[0][0] if not self.full_match else self.lazy_pinyin(text)[0]
+
+    def get_pinyin(self, text):
+        if not re.findall(r'[\ue4e00-\u9fa5]', text):
+            return text
+
+        n_line = ''
+        for i in text:
+            if re.findall(r'[\u4e00-\u9fa5]', i):
+                lt = self.get_pinyin_first(i)
+            else:
+                lt = i
+            n_line += lt
+        return ''.join(n_line)
+
+    def run(self):
+        from angeltools.Slavers import Slaves
+        from BaseColor.base_colors import hgreen
+
+        with open(self.file_path, 'r') as rf:
+            lines = rf.readlines()
+        lines = [x for x in lines if x.strip()]
+        py_raw_lines_map = {}
+        py_lines = Slaves().work(self.get_pinyin, lines)
+        for raw, py in zip(lines, py_lines):
+            py_raw_lines_map[py] = raw
+
+        sorted_py_lines = sorted(py_lines, reverse=self.reverse)
+        sorted_lines = [py_raw_lines_map.get(x) for x in sorted_py_lines]
+
+        with open(self.save_path, 'w') as wf:
+            wf.writelines(sorted_lines)
+
+        print(f"data saved: {hgreen(self.save_path)}")
+
+
 if __name__ == '__main__':
     # with FileLock('test-lock', timeout=10) as lock:
     #     print(lock.lock_time(format_time=True))
@@ -343,16 +409,23 @@ if __name__ == '__main__':
     #         time.sleep(0.5)
     #     print(lock.lock_time(format_time=True))
 
-    from angeltools.Slavers import BigSlaves
-
-    def do_job(job_name):
-        time.sleep(random.randint(1, 10) / 10)
-        with FileLock('test-lock', timeout=1000):
-            for i in range(20):
-                print(f"{job_name}: {i}")
-                time.sleep(0.5)
-
-    BigSlaves(7).work(do_job, [x for x in "ABCDEFGHIJKLMN"])
+    # from angeltools.Slavers import BigSlaves
+    #
+    # def do_job(job_name):
+    #     time.sleep(random.randint(1, 10) / 10)
+    #     with FileLock('test-lock', timeout=1000):
+    #         for i in range(20):
+    #             print(f"{job_name}: {i}")
+    #             time.sleep(0.5)
+    #
+    # BigSlaves(7).work(do_job, [x for x in "ABCDEFGHIJKLMN"])
 
     # uf = UrlFormat('http://www.baidu.com?page=1&user=me&name=%E5%BC%A0%E4%B8%89')
     # print(uf.split_url())
+
+    SortedWithFirstPinyin(
+        file_path='/home/ga/Guardian/For-Python/AngelTools/angeltools/testfiles/res.txt',
+        # save_path=save_path,
+        full_match=True,
+        reverse=False,
+    ).run()
