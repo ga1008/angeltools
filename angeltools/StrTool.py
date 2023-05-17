@@ -7,13 +7,20 @@ import time
 import uuid
 from pathlib import Path
 
+import urllib3
+
 
 def get_domain(url):
-    import urllib3
-
-    domain = urllib3.get_host(url)[1]
-    if domain.startswith('www.'):
-        domain = domain.lstrip('www.')
+    domain = ''
+    if url and url.strip():
+        domain = urllib3.get_host(url)[1]
+        if '.' in url:
+            second_domain = domain.split('.')[-2]
+            if second_domain in {"com", "net", "org", "gov"}:
+                dml = domain.split(".")[-3:]
+            else:
+                dml = domain.split(".")[-2:]
+            domain = '.'.join(dml)
     return domain
 
 
@@ -218,6 +225,9 @@ class UrlFormat:
         return new_url
 
 
+file_lock_prefix = 'file_lock_'
+
+
 class FileLock:
     """
     使用文件操作实现的异步锁
@@ -227,8 +237,10 @@ class FileLock:
         do_the_jobs()
 
     """
-    def __init__(self, lock_id, timeout: float or int = None):
+    def __init__(self, lock_id=None, timeout: float or int = None):
         self.timeout = float(timeout) if timeout else 3600 * 24 * 30 * 12
+        self.__lock_dir()
+        self.__get_lock_prefix()
         self.__init_lock(lock_id)
         self.fps = self.fp.absolute()
         self.enter_with_acquire = False
@@ -244,13 +256,32 @@ class FileLock:
         if 'timeout' in kwargs:
             self.timeout = kwargs['timeout']
 
-    def __init_lock(self, lock_id):
-        lock_id_hash = hash_str(str(lock_id))
-
-        if sys.platform == 'linux':
-            self.fp = Path(f'/tmp/{lock_id_hash}.lock')
+    def clear(self, lock_id=None):
+        if lock_id:
+            self.__init_lock(lock_id)
+            self.__exit_lock()
         else:
-            self.fp = Path(__file__).parent / f'/{lock_id_hash}.lock'
+            for file in os.listdir(self.lock_dir):
+                if file.startswith(file_lock_prefix):
+                    try:
+                        os.remove(self.lock_dir / file)
+                    except:
+                        pass
+
+    def __lock_dir(self):
+        if sys.platform == 'linux':
+            self.lock_dir = Path(f'/tmp/')
+        else:
+            self.lock_dir = Path(__file__).parent / 'FileLock'
+
+    def __get_lock_prefix(self):
+        self.fp_prefix = self.lock_dir / file_lock_prefix
+
+    def __init_lock(self, lock_id):
+        if not lock_id:
+            lock_id = gen_uid1()
+        lock_id_hash = hash_str(str(lock_id))
+        self.fp = Path(f'{str(self.fp_prefix.absolute())}{lock_id_hash}.lock')
 
     def __acquire_lock(self):
         expire_time = time.time() + self.timeout
@@ -274,13 +305,20 @@ class FileLock:
     def __get_size(self):
         return 0 if not os.path.exists(self.fps) else os.path.getsize(self.fps)
 
+    def __write_num(self, num):
+        with open(self.fps, 'w+') as wf:
+            wf.write(str(num))
+            wf.flush()
+
     def __add_num(self):
-        self.fp.write_text("1" * (self.__get_size() + 1))
+        # self.fp.write_text("1" * (self.__get_size() + 1))
+        self.__write_num("1" * (self.__get_size() + 1))
 
     def __sub_num(self):
         num = self.__get_size()
         if num > 1:
-            self.fp.write_text("1" * (num - 1))
+            # self.fp.write_text("1" * (num - 1))
+            self.__write_num("1" * (num - 1))
         else:
             os.remove(self.fps)
 
@@ -299,7 +337,7 @@ class FileLock:
             pass
 
     def __wait(self):
-        time.sleep(random.randint(1, 10)/10)
+        time.sleep(random.randint(1, 5)/10)
 
     def acquire(self, **kwargs):
         if 'timeout' in kwargs:
@@ -403,29 +441,34 @@ class SortedWithFirstPinyin(object):
 
 if __name__ == '__main__':
     # with FileLock('test-lock', timeout=10) as lock:
-    #     print(lock.lock_time(format_time=True))
+    #     # print(lock.lock_time(format_time=True))
     #     for i in range(100):
     #         print(i)
     #         time.sleep(0.5)
-    #     print(lock.lock_time(format_time=True))
+    #     # print(lock.lock_time(format_time=True))
 
-    # from angeltools.Slavers import BigSlaves
-    #
-    # def do_job(job_name):
-    #     time.sleep(random.randint(1, 10) / 10)
-    #     with FileLock('test-lock', timeout=1000):
-    #         for i in range(20):
-    #             print(f"{job_name}: {i}")
-    #             time.sleep(0.5)
-    #
-    # BigSlaves(7).work(do_job, [x for x in "ABCDEFGHIJKLMN"])
+    def do_job(job_name):
+        time.sleep(random.randint(1, 10) / 10)
+        with FileLock(f'test-lock', timeout=12):
+            for i in range(10):
+                print(f"{job_name}: {i}")
+                time.sleep(0.5)
+                # if i == 5:
+                #     raise ValueError("进程出错了")
+
+
+    # do_job("进程1")
+    from angeltools.Slavers import BigSlaves
+    BigSlaves(7).work(do_job, ["进程1", "进程2", "进程3"])
+
+    # FileLock().clear(lock_id='test-lock')
 
     # uf = UrlFormat('http://www.baidu.com?page=1&user=me&name=%E5%BC%A0%E4%B8%89')
     # print(uf.split_url())
 
-    SortedWithFirstPinyin(
-        file_path='/home/ga/Guardian/For-Python/AngelTools/angeltools/testfiles/res.txt',
-        # save_path=save_path,
-        full_match=True,
-        reverse=False,
-    ).run()
+    # SortedWithFirstPinyin(
+    #     file_path='/home/ga/Guardian/For-Python/AngelTools/angeltools/testfiles/res.txt',
+    #     # save_path=save_path,
+    #     full_match=True,
+    #     reverse=False,
+    # ).run()
