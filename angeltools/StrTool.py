@@ -238,6 +238,7 @@ class FileLock:
 
     """
     def __init__(self, lock_id=None, timeout: float or int = None):
+        self.lock_id = lock_id
         self.timeout = float(timeout) if timeout else 3600 * 24 * 30 * 12
         self.__lock_dir()
         self.__get_lock_prefix()
@@ -286,8 +287,15 @@ class FileLock:
     def __acquire_lock(self):
         expire_time = time.time() + self.timeout
         try:
-            while self.__get_size() and time.time() - expire_time < 0:
-                self.__wait()
+            while True:
+                try:
+                    if self.__get_size() and time.time() - expire_time < 0:
+                        self.__wait()
+                    else:
+                        break
+                except Exception as E:
+                    print(f"acquire_lock error; lock id: {self.lock_id}: \n{E}")
+                    break
         except KeyboardInterrupt:
             sys.exit()
         self.__add_num()
@@ -449,12 +457,16 @@ if __name__ == '__main__':
 
     def do_job(job_name):
         time.sleep(random.randint(1, 10) / 10)
-        with FileLock(f'test-lock', timeout=12):
+        with FileLock(f'test-lock_s1', timeout=12):
             for i in range(10):
-                print(f"{job_name}: {i}")
+                print(f"s1-{job_name}: {i}")
                 time.sleep(0.5)
-                # if i == 5:
-                #     raise ValueError("进程出错了")
+            with FileLock(f'test-lock_s2', timeout=12):
+                for i in range(10):
+                    print(f"s2-{job_name}: {i}")
+                    time.sleep(0.5)
+                    # if i == 5:
+                    #     raise ValueError("进程出错了")
 
 
     # do_job("进程1")
