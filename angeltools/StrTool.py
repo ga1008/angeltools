@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import random
 import re
@@ -226,6 +227,64 @@ class UrlFormat:
 
 
 file_lock_prefix = 'file_lock_'
+
+
+class LocalData:
+    def __init__(self, store_path=None):
+        file_dir = self._init_local_path(store_path)
+        file_pre = "core_data_"
+        self.f_pre = f"{file_dir}/{file_pre}"
+
+    def _init_local_path(self, file_path):
+        import subprocess
+
+        if not file_path:
+            file_path = '/tmp'
+        if not os.path.exists(file_path):
+            params = [
+                f"mkdir -p {file_path}",
+            ]
+            dp = subprocess.run(params, shell=True, capture_output=True)
+            if "无法创建目录" in dp.stderr.decode('utf-8'):
+                file_path = '/tmp'
+        return file_path
+
+    def _file_name(self, fid):
+        return f"{self.f_pre}{fid}.json"
+
+    def get_fid(self, data):
+        if not isinstance(data, str):
+            data = json.dumps(data)
+        return hash_str(data)
+
+    def dump(self, data, fid=None):
+        if not isinstance(data, str):
+            data = json.dumps(data)
+        if not fid:
+            fid = self.get_fid(data=data)
+        fn = self._file_name(fid)
+        if os.path.exists(fn):
+            return fid
+        with open(fn, 'w') as wf:
+            wf.write(data)
+            wf.flush()
+        wf.close()
+        return fid
+
+    def load(self, fid, default=None):
+        fn = self._file_name(fid)
+        if os.path.exists(fn):
+            try:
+                with open(fn, 'r') as rf:
+                    data = json.loads(rf.read())
+                rf.close()
+            except Exception as E:
+                print(E)
+                os.remove(fn)
+                data = default
+        else:
+            data = default
+        return data
 
 
 class FileLock:
