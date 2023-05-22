@@ -234,6 +234,7 @@ class LocalData:
         file_dir = self._init_local_path(store_path)
         file_pre = "core_data_"
         self.f_pre = f"{file_dir}/{file_pre}"
+        self.expire_time = 3600 * 24 * 365 * 100
 
     def _init_local_path(self, file_path):
         import subprocess
@@ -257,18 +258,22 @@ class LocalData:
             data = json.dumps(data)
         return hash_str(data)
 
-    def dump(self, data, fid=None):
-        if not isinstance(data, str):
-            data = json.dumps(data)
+    def dump(self, data, fid=None, expire=None):
+        exp = int(expire or self.expire_time) + int(time.time())
+        dm_data = {"data": data, "expire": exp}
+        dm_data = json.dumps(dm_data)
         if not fid:
             fid = self.get_fid(data=data)
         fn = self._file_name(fid)
-        if os.path.exists(fn):
-            return fid
-        with open(fn, 'w') as wf:
-            wf.write(data)
-            wf.flush()
-        wf.close()
+        # if os.path.exists(fn):
+        #     return fid
+        with FileLock(lock_id=file_lock_prefix + fid, timeout=10):
+            if os.path.exists(fn):
+                os.remove(fn)
+            with open(fn, 'w') as wf:
+                wf.write(dm_data)
+                wf.flush()
+            wf.close()
         return fid
 
     def load(self, fid, default=None):
@@ -277,6 +282,11 @@ class LocalData:
             try:
                 with open(fn, 'r') as rf:
                     data = json.loads(rf.read())
+                    data = data.get("data")
+                    expire = data.get("expire")
+                    if expire and expire > int(time.time()):
+                        os.remove(fn)
+                        data = default
                 rf.close()
             except Exception as E:
                 print(E)
