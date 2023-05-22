@@ -380,7 +380,11 @@ class FileLock:
         return num
 
     def __get_size(self):
-        return 0 if not os.path.exists(self.fps) else os.path.getsize(self.fps)
+        try:
+            size = 0 if not os.path.exists(self.fps) else os.path.getsize(self.fps)
+        except:
+            size = 0
+        return size
 
     def __write_num(self, num):
         with open(self.fps, 'w+') as wf:
