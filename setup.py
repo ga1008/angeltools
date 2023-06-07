@@ -8,7 +8,7 @@ using_setuptools = True
 
 setup_args = {
     "name": "angeltools",
-    "version": "0.3.2",
+    "version": "0.3.6",
     "url": "https://github.com/ga1008/angeltools",
     "description": "personal python small tools collection",
     "long_description": long_description,

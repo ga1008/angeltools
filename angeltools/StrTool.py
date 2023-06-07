@@ -230,9 +230,9 @@ file_lock_prefix = 'file_lock_'
 
 
 class LocalData:
-    def __init__(self, store_path=None):
+    def __init__(self, store_path=None, name=None):
         file_dir = self._init_local_path(store_path)
-        file_pre = "core_data_"
+        file_pre = f"{name}_" if name else "local_store_"
         self.f_pre = f"{file_dir}/{file_pre}"
         self.expire_time = 3600 * 24 * 365 * 100
 
@@ -282,9 +282,9 @@ class LocalData:
             try:
                 with open(fn, 'r') as rf:
                     data = json.loads(rf.read())
+                    expire = int(data.get("expire"))
                     data = data.get("data")
-                    expire = data.get("expire")
-                    if expire and expire > int(time.time()):
+                    if expire and int(time.time()) > expire:
                         os.remove(fn)
                         data = default
                 rf.close()
@@ -339,7 +339,7 @@ class FileLock:
                         pass
 
     def __lock_dir(self):
-        if sys.platform == 'linux':
+        if sys.platform == 'linux' or sys.platform == 'darwin':
             self.lock_dir = Path(f'/tmp/')
         else:
             self.lock_dir = Path(__file__).parent / 'FileLock'
