@@ -57,7 +57,7 @@ class RedisConnect:
         cli = self.cli()
         cli.hdel(name, *key_list)
 
-    def keys(self, pattern):
+    def get_keys(self, pattern):
         if not pattern:
             return
         return redis.Redis(**self.params).keys(pattern)
@@ -65,7 +65,7 @@ class RedisConnect:
     def set_values(self, key_pattern, return_dic=True):
         if not key_pattern:
             return
-        keys = self.keys(key_pattern)
+        keys = self.get_keys(key_pattern)
 
         values = list()
         values_dic = dict()

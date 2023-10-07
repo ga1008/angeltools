@@ -4,11 +4,6 @@ import os.path
 import time
 from pathlib import Path
 
-from BaseColor.base_colors import hred, green, yellow, hblue
-
-from angeltools.SysTool import cmd_sta, run_cmd
-from angeltools.ImageTool import text2chars, image2chars
-
 
 def txt2chars(args=None):
     dp = ' *** 文字转字符块小工具'
@@ -64,6 +59,7 @@ def txt2chars(args=None):
             chart_list = json.loads(chart_list)
         except:
             raise ValueError("-c chart_list 参数不正确")
+    from angeltools.ImageTool import text2chars
 
     text2chars(
         text,
@@ -129,6 +125,7 @@ def img2chars(args=None):
             chart_list = json.loads(chart_list)
         except:
             raise ValueError("-c chart_list 参数不正确")
+    from angeltools.ImageTool import image2chars
 
     image2chars(
         image_path=image,
@@ -140,42 +137,35 @@ def img2chars(args=None):
     )
 
 
-def cmd_status(args=None):
-    dp = ' *** linux 进程cpu内存查看'
+def text_sorted_by_first_pinyin(args=None):
+    dp = ' *** a tool to sorted text lines by first pinyin letter'
     da = "--->   "
     parser = argparse.ArgumentParser(description=dp, add_help=True)
-    parser.add_argument("keyword", type=str, default=None, help=f'{da} 关键字')
+    parser.add_argument("file_path", type=str, default=None, help=f'{da} 路径')
 
-    parser.add_argument("-i", "--interval", type=float, dest="interval", default=1, help=f'{da} 刷新间隔')
-    parser.add_argument("-s", "--sorted_by", type=str, dest="sorted_by", default='pid', help=f'{da} 排序方式，pid、cpu、men、name。分别对应：进程id，cpu百分比，内存百分比，进程名')
-    parser.add_argument("-r", "--sorted_reverse", type=str, dest="sorted_reverse", nargs='?', default='n', help=f'{da}y/n 是否反向排序，默认否')
-    parser.add_argument("-d", "--detail", type=str, dest="detail", nargs='?', default='n', help=f'{da}y/n 是否显示命令全路径，默认否')
+    parser.add_argument("-p", "--save_path", type=str, dest="save_path",
+                        default=None, help=f'{da} save 路径')
+
+    parser.add_argument("-f", "--full_match", type=bool, dest="full_match", nargs='?', default=False,
+                        help=f'{da} match all pinyin letters')
+
+    parser.add_argument("-r", "--reverse", type=bool, dest="reverse", nargs='?', default=False,
+                        help=f'{da} 反转')
+
+    from angeltools.StrTool import SortedWithFirstPinyin
 
     args = parser.parse_args()
-    keyword = args.keyword
-    if not keyword and keyword.strip():
-        print("keyword is required!")
-        return False
 
-    try:
-        interval = float(args.interval) or 1.0
-    except:
-        print("Interval Error, float number is required!")
-        return False
-
-    sorted_by = args.sorted_by
-    sorted_reverse = args.sorted_reverse
-    detail = args.detail
-    detail = False if detail else True
-    sorted_reverse = False if sorted_reverse else True
-
-    try:
-        cmd_sta(keyword, interval, detail, sorted_by, sorted_reverse)
-    except KeyboardInterrupt:
-        print("\n exit")
-    except Exception as E:
-        print(f"\n Error: {E}")
-    return
+    file_path = args.file_path
+    save_path = args.save_path
+    reverse = True if args.reverse else False
+    full_match = True if args.full_match else False
+    SortedWithFirstPinyin(
+        file_path=file_path,
+        save_path=save_path,
+        full_match=full_match,
+        reverse=reverse,
+    ).run()
 
 
 def timing_cmd(args=None):
@@ -186,6 +176,8 @@ def timing_cmd(args=None):
 
     parser.add_argument("-i", "--interval", type=float, dest="interval", default=60, help=f'{da} 执行间隔，单位秒，默认60s')
     parser.add_argument("-f", "--file", type=str, dest="file", default=None, help=f'{da} 命令所在文件的路径，文件内每行一条命令。若设置了此文件参数，则前面位置参数将失效')
+    from BaseColor.base_colors import hred, green, yellow, hblue
+    from angeltools.SysTool import run_cmd
 
     args = parser.parse_args()
     cmd_list = [args.cmd]

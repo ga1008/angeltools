@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import random
 import re
@@ -6,17 +7,21 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from urllib.parse import quote, urlparse, unquote
 
 import urllib3
-from scrapy import Selector
-from scrapy.http import HtmlResponse
 
 
 def get_domain(url):
-    domain = urllib3.get_host(url)[1]
-    if domain.startswith('www.'):
-        domain = domain.lstrip('www.')
+    domain = ''
+    if url and url.strip():
+        domain = urllib3.get_host(url)[1]
+        if '.' in url:
+            second_domain = domain.split('.')[-2]
+            if second_domain in {"com", "net", "org", "gov"}:
+                dml = domain.split(".")[-3:]
+            else:
+                dml = domain.split(".")[-2:]
+            domain = '.'.join(dml)
     return domain
 
 
@@ -42,10 +47,15 @@ class ScrapyXpath:
     包装 scrapy response 的xpath方法，不用每次都 extract 再判断结果，使爬虫更整洁
     也可以传入由 requests 获取的 response text 和 url，变成 scrapy selector 对象方便提取
     """
+    from scrapy import Selector
+
     def __init__(self, scrapy_selector: Selector = None, url=None, html_content=None):
         """
         :param scrapy_selector:     response.xpath('//div[@class="xxx"]')
         """
+        from scrapy.http import HtmlResponse
+
+        self.HtmlResponse = HtmlResponse
         if scrapy_selector:
             self.raw = scrapy_selector
         elif url and html_content:
@@ -54,7 +64,7 @@ class ScrapyXpath:
             raise ValueError('scrapy_selector or url and html_content required!')
 
     def scrapy_response(self, url, html_content):
-        return HtmlResponse(url=url, body=html_content, encoding="utf-8")
+        return self.HtmlResponse(url=url, body=html_content, encoding="utf-8")
 
     def response_selector(self, url, html_content):
         return self.scrapy_response(url, html_content).xpath('//html')
@@ -115,14 +125,19 @@ class ScrapyXpath:
 
 class UrlFormat:
     def __init__(self, url=None):
+        from urllib.parse import quote, urlparse, unquote
+
+        self.quote = quote
+        self.urlparse = urlparse
+        self.unquote = unquote
         self.url = url
 
     def quote_str(self, s):
-        res = quote(str(s).encode())
+        res = self.quote(str(s).encode())
         return res
 
     def unquote_str(self, s):
-        res = unquote(s)
+        res = self.unquote(s)
         return res
 
     def make_url(self, base, params_add_dic, quote_param=True):
@@ -133,8 +148,8 @@ class UrlFormat:
     def split_url(self):
         url_data = dict()
         if self.url:
-            temp_data = urlparse(unquote(self.url))
-            url_data["queries"] = {x.split("=")[0]: unquote("=".join(x.split("=")[1:])) for x in temp_data.query.split("&")}
+            temp_data = self.urlparse(self.unquote(self.url))
+            url_data["queries"] = {x.split("=")[0]: self.unquote("=".join(x.split("=")[1:])) for x in temp_data.query.split("&")}
             url_data["host"] = temp_data.netloc
             url_data["protocol"] = temp_data.scheme
             url_data["path"] = temp_data.path
@@ -211,6 +226,77 @@ class UrlFormat:
         return new_url
 
 
+file_lock_prefix = 'file_lock_'
+
+
+class LocalData:
+    def __init__(self, store_path=None, name=None):
+        file_dir = self._init_local_path(store_path)
+        file_pre = f"{name}_" if name else "local_store_"
+        self.f_pre = f"{file_dir}/{file_pre}"
+        self.expire_time = 3600 * 24 * 365 * 100
+
+    def _init_local_path(self, file_path):
+        import subprocess
+
+        if not file_path:
+            file_path = '/tmp'
+        if not os.path.exists(file_path):
+            params = [
+                f"mkdir -p {file_path}",
+            ]
+            dp = subprocess.run(params, shell=True, capture_output=True)
+            if "无法创建目录" in dp.stderr.decode('utf-8'):
+                file_path = '/tmp'
+        return file_path
+
+    def _file_name(self, fid):
+        return f"{self.f_pre}{fid}.json"
+
+    def get_fid(self, data):
+        if not isinstance(data, str):
+            data = json.dumps(data)
+        return hash_str(data)
+
+    def dump(self, data, fid=None, expire=None):
+        exp = int(expire or self.expire_time) + int(time.time())
+        dm_data = {"data": data, "expire": exp}
+        dm_data = json.dumps(dm_data)
+        if not fid:
+            fid = self.get_fid(data=data)
+        fn = self._file_name(fid)
+        # if os.path.exists(fn):
+        #     return fid
+        with FileLock(lock_id=file_lock_prefix + fid, timeout=10):
+            if os.path.exists(fn):
+                os.remove(fn)
+            with open(fn, 'w') as wf:
+                wf.write(dm_data)
+                wf.flush()
+            wf.close()
+        return fid
+
+    def load(self, fid, default=None):
+        fn = self._file_name(fid)
+        if os.path.exists(fn):
+            try:
+                with open(fn, 'r') as rf:
+                    data = json.loads(rf.read())
+                    expire = int(data.get("expire"))
+                    data = data.get("data")
+                    if expire and int(time.time()) > expire:
+                        os.remove(fn)
+                        data = default
+                rf.close()
+            except Exception as E:
+                print(E)
+                os.remove(fn)
+                data = default
+        else:
+            data = default
+        return data
+
+
 class FileLock:
     """
     使用文件操作实现的异步锁
@@ -220,8 +306,11 @@ class FileLock:
         do_the_jobs()
 
     """
-    def __init__(self, lock_id, timeout: float or int = None):
+    def __init__(self, lock_id=None, timeout: float or int = None):
+        self.lock_id = lock_id
         self.timeout = float(timeout) if timeout else 3600 * 24 * 30 * 12
+        self.__lock_dir()
+        self.__get_lock_prefix()
         self.__init_lock(lock_id)
         self.fps = self.fp.absolute()
         self.enter_with_acquire = False
@@ -237,19 +326,45 @@ class FileLock:
         if 'timeout' in kwargs:
             self.timeout = kwargs['timeout']
 
-    def __init_lock(self, lock_id):
-        lock_id_hash = hash_str(str(lock_id))
-
-        if sys.platform == 'linux':
-            self.fp = Path(f'/tmp/{lock_id_hash}.lock')
+    def clear(self, lock_id=None):
+        if lock_id:
+            self.__init_lock(lock_id)
+            self.__exit_lock()
         else:
-            self.fp = Path(__file__).parent / f'{lock_id_hash}.lock'
+            for file in os.listdir(self.lock_dir):
+                if file.startswith(file_lock_prefix):
+                    try:
+                        os.remove(self.lock_dir / file)
+                    except:
+                        pass
+
+    def __lock_dir(self):
+        if sys.platform == 'linux' or sys.platform == 'darwin':
+            self.lock_dir = Path(f'/tmp/')
+        else:
+            self.lock_dir = Path(__file__).parent / 'FileLock'
+
+    def __get_lock_prefix(self):
+        self.fp_prefix = self.lock_dir / file_lock_prefix
+
+    def __init_lock(self, lock_id):
+        if not lock_id:
+            lock_id = gen_uid1()
+        lock_id_hash = hash_str(str(lock_id))
+        self.fp = Path(f'{str(self.fp_prefix.absolute())}{lock_id_hash}.lock')
 
     def __acquire_lock(self):
         expire_time = time.time() + self.timeout
         try:
-            while self.__get_size() and time.time() - expire_time < 0:
-                self.__wait()
+            while True:
+                try:
+                    if self.__get_size() and time.time() - expire_time < 0:
+                        self.__wait()
+                    else:
+                        break
+                except Exception as E:
+                    print(f"acquire_lock error; lock id: {self.lock_id}: \n{E}")
+                    break
         except KeyboardInterrupt:
             sys.exit()
         self.__add_num()
@@ -265,15 +380,26 @@ class FileLock:
         return num
 
     def __get_size(self):
-        return 0 if not os.path.exists(self.fps) else os.path.getsize(self.fps)
+        try:
+            size = 0 if not os.path.exists(self.fps) else os.path.getsize(self.fps)
+        except:
+            size = 0
+        return size
+
+    def __write_num(self, num):
+        with open(self.fps, 'w+') as wf:
+            wf.write(str(num))
+            wf.flush()
 
     def __add_num(self):
-        self.fp.write_text("1" * (self.__get_size() + 1))
+        # self.fp.write_text("1" * (self.__get_size() + 1))
+        self.__write_num("1" * (self.__get_size() + 1))
 
     def __sub_num(self):
         num = self.__get_size()
         if num > 1:
-            self.fp.write_text("1" * (num - 1))
+            # self.fp.write_text("1" * (num - 1))
+            self.__write_num("1" * (num - 1))
         else:
             os.remove(self.fps)
 
@@ -292,7 +418,7 @@ class FileLock:
             pass
 
     def __wait(self):
-        time.sleep(random.randint(1, 10)/10)
+        time.sleep(random.randint(1, 5)/10)
 
     def acquire(self, **kwargs):
         if 'timeout' in kwargs:
@@ -335,24 +461,99 @@ class FileLock:
         return lock_time
 
 
+class SortedWithFirstPinyin(object):
+
+    def __init__(self, file_path, save_path=None, full_match=False, reverse=False):
+        from BaseColor.base_colors import hred
+        from pypinyin import lazy_pinyin
+
+        file_path = Path(file_path)
+        if not os.path.exists(str(file_path.absolute())):
+            print(f"No such file: {hred(file_path.absolute())}")
+            sys.exit(1)
+        self.file_path = file_path
+        self.lazy_pinyin = lazy_pinyin
+
+        if not save_path:
+            save_path_split = self.file_path.name.split('.')
+            file_name = '.'.join(save_path_split[:-1])
+            sub = save_path_split[-1]
+            save_path = self.file_path.parent / f"{file_name}_sorted.{sub}"
+        self.save_path = str(Path(save_path).absolute())
+        self.full_match = full_match
+        self.reverse = reverse
+
+    def get_pinyin_first(self, text):
+        return self.lazy_pinyin(text)[0][0] if not self.full_match else self.lazy_pinyin(text)[0]
+
+    def get_pinyin(self, text):
+        if not re.findall(r'[\ue4e00-\u9fa5]', text):
+            return text
+
+        n_line = ''
+        for i in text:
+            if re.findall(r'[\u4e00-\u9fa5]', i):
+                lt = self.get_pinyin_first(i)
+            else:
+                lt = i
+            n_line += lt
+        return ''.join(n_line)
+
+    def run(self):
+        from angeltools.Slavers import Slaves
+        from BaseColor.base_colors import hgreen
+
+        with open(self.file_path, 'r') as rf:
+            lines = rf.readlines()
+        lines = [x for x in lines if x.strip()]
+        py_raw_lines_map = {}
+        py_lines = Slaves().work(self.get_pinyin, lines)
+        for raw, py in zip(lines, py_lines):
+            py_raw_lines_map[py] = raw
+
+        sorted_py_lines = sorted(py_lines, reverse=self.reverse)
+        sorted_lines = [py_raw_lines_map.get(x) for x in sorted_py_lines]
+
+        with open(self.save_path, 'w') as wf:
+            wf.writelines(sorted_lines)
+
+        print(f"data saved: {hgreen(self.save_path)}")
+
+
 if __name__ == '__main__':
     # with FileLock('test-lock', timeout=10) as lock:
-    #     print(lock.lock_time(format_time=True))
+    #     # print(lock.lock_time(format_time=True))
     #     for i in range(100):
     #         print(i)
     #         time.sleep(0.5)
-    #     print(lock.lock_time(format_time=True))
-
-    from angeltools.Slavers import BigSlaves
+    #     # print(lock.lock_time(format_time=True))
 
     def do_job(job_name):
         time.sleep(random.randint(1, 10) / 10)
-        with FileLock('test-lock', timeout=1000):
-            for i in range(20):
-                print(f"{job_name}: {i}")
+        with FileLock(f'test-lock_s1', timeout=12):
+            for i in range(10):
+                print(f"s1-{job_name}: {i}")
                 time.sleep(0.5)
+            with FileLock(f'test-lock_s2', timeout=12):
+                for i in range(10):
+                    print(f"s2-{job_name}: {i}")
+                    time.sleep(0.5)
+                    # if i == 5:
+                    #     raise ValueError("进程出错了")
 
-    BigSlaves(7).work(do_job, [x for x in "ABCDEFGHIJKLMN"])
+
+    # do_job("进程1")
+    from angeltools.Slavers import BigSlaves
+    BigSlaves(7).work(do_job, ["进程1", "进程2", "进程3"])
+
+    # FileLock().clear(lock_id='test-lock')
 
     # uf = UrlFormat('http://www.baidu.com?page=1&user=me&name=%E5%BC%A0%E4%B8%89')
     # print(uf.split_url())
+
+    # SortedWithFirstPinyin(
+    #     file_path='/home/ga/Guardian/For-Python/AngelTools/angeltools/testfiles/res.txt',
+    #     # save_path=save_path,
+    #     full_match=True,
+    #     reverse=False,
+    # ).run()

@@ -8,7 +8,7 @@ using_setuptools = True
 
 setup_args = {
     "name": "angeltools",
-    "version": "0.2.3",
+    "version": "0.3.6",
     "url": "https://github.com/ga1008/angeltools",
     "description": "personal python small tools collection",
     "long_description": long_description,
@@ -26,6 +26,7 @@ setup_args = {
         'img2char = angeltools.commands:img2chars',
         'cmdsta = angeltools.commands:cmd_status',
         'tmcmd = angeltools.commands:timing_cmd',
+        'sortbypy = angeltools.commands:text_sorted_by_first_pinyin',
     ]},
     "classifiers": [
         "Programming Language :: Python :: 3",
@@ -33,6 +34,7 @@ setup_args = {
         "Operating System :: OS Independent",
     ],
     "install_requires": [
+        "setuptools",
         "tqdm",
         "numpy",
         "psutil",
@@ -41,7 +43,8 @@ setup_args = {
         "requests",
         "pygame",
         "pillow",
-        "python-redis-lock",
+        "pypinyin",
+        "basecolors",
     ],
 }
 
