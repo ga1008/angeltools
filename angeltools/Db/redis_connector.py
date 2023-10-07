@@ -7,10 +7,6 @@ import traceback
 
 import redis
 import redis_lock
-from BaseColor.base_colors import hgreen
-
-from angeltools.StrTool import get_domain, gen_uid1
-from angeltools.Db import get_uri_info
 
 
 class RedisConnect:
@@ -18,6 +14,8 @@ class RedisConnect:
         """
         操作本地 redis
         """
+        from angeltools.Db import get_uri_info
+
         REDIS_URI, REDIS_USER, REDIS_PASS, REDIS_HOST, REDIS_PORT, REDIS_DB = get_uri_info(
             "REDIS_URI", default_uri="redis://localhost:6379/1", uri_only=False
         )
@@ -30,6 +28,8 @@ class RedisConnect:
         if connect_params:
             self.params.update(connect_params)
         self.params.update({"db": db or 0})
+        from angeltools.StrTool import get_domain
+        self.get_domain = get_domain
 
     def cli(self):
         try:
@@ -99,7 +99,7 @@ class RedisConnect:
         :param time_range:  随机时间列表  [start, end]
         :return:
         """
-        domain = get_domain(url)
+        domain = self.get_domain(url)
 
         time_range = [10, 30] if not time_range else time_range
         wait_time = random.randint(*time_range)
@@ -123,12 +123,14 @@ class RedisFdfs:
         self.lock = self.__lock()
         self.expire = expire if expire else 3600 * 24 * 7       # 默认1星期缓存
         self.__id_prefix = id_prefix if id_prefix else 'RedisFdfsFile_'
+        from angeltools.StrTool import gen_uid1
+        self.get_uuid = gen_uid1
 
     def __lock(self):
         return redis_lock.Lock(self.lock_client, self.lock_name, expire=10)
 
     def __upload(self, file_string: str, expire: int):
-        uid = self.__id_prefix + gen_uid1()
+        uid = self.__id_prefix + self.get_uuid()
         expire = expire if expire else self.expire
         file_encoded = base64.b64encode(file_string.encode())
         self.cli.setex(uid, expire, file_encoded)
@@ -148,6 +150,7 @@ class RedisFdfs:
             with self.lock:
                 save_id = self.__upload(file_string, expire=expire)
             if print_out:
+                from BaseColor.base_colors import hgreen
                 print(f"file cache: [ {hgreen(save_id)} ]")
         except Exception as UE:
             print(f"error when caching file: {UE}")

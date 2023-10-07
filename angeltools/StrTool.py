@@ -520,6 +520,26 @@ class SortedWithFirstPinyin(object):
         print(f"data saved: {hgreen(self.save_path)}")
 
 
+class Printer:
+    def __init__(self, name, highlight=False):
+        self.name = name
+        from BaseColor.base_colors import hred, hgreen, hyellow, hmagenta, hblue, hcyan, red, green, yellow, magenta, \
+            blue, cyan
+        if highlight:
+            self.color = random.choice([hred, hgreen, hyellow, hmagenta, hblue, hcyan])
+        else:
+            self.color = random.choice([red, green, yellow, magenta, blue, cyan])
+
+    def __call__(self, *args):
+        txt = ' '.join([str(i) for i in args])
+        txt = f"[{self.name}]-[{self.get_timestr()}]>>> " + txt
+        print(self.color(txt))
+        return self.name
+
+    def get_timestr(self):
+        return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
 if __name__ == '__main__':
     # with FileLock('test-lock', timeout=10) as lock:
     #     # print(lock.lock_time(format_time=True))
